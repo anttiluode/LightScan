@@ -30,6 +30,8 @@ Built from the research direction of [Moon](https://github.com/anttiluode/Moon) 
 
 ## Windows quick start
 
+![[pic2](pic2.png)
+
 Check from **your PC**, in a browser, that the phone's IP Webcam service works at `http://PHONE_IP:8080/`. In particular try the snapshot URL `http://PHONE_IP:8080/shot.jpg` or the video stream `http://PHONE_IP:8080/video`.
 
 ```bat
