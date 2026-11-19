@@ -1,0 +1,38 @@
+{
+  "trained_pairs": 108,
+  "heldout_pairs": 16,
+  "inverse": {
+    "mae": 0.1146,
+    "rmse": 0.1794
+  },
+  "direct_camera_baseline": {
+    "mae": 0.434,
+    "rmse": 0.46
+  },
+  "physical_camera": {
+    "signal_p90": 168.0,
+    "signal_p995": 185.0,
+    "rect": [
+      581,
+      0,
+      1256,
+      1080
+    ],
+    "roi": [
+      431,
+      0,
+      1489,
+      1080
+    ],
+    "camera_size": [
+      1920,
+      1080
+    ],
+    "dynamic_camera_levels": 167.0,
+    "black_repeat_difference": 0.168,
+    "white_clip_fraction": 0.0
+  },
+  "model_type": "regularized linear inverse",
+  "meaning": "Measures 2D screen images behind a FIXED diffuser; not depth or CT",
+  "beats_baseline": true
+}
