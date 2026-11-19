@@ -1,0 +1,339 @@
+{
+  "schema_version": 1,
+  "created_utc": "2026-11-19T07:57:31.208602+00:00",
+  "mode": "physical",
+  "camera_source": "IP Webcam shot",
+  "screen_size_px": [
+    1536,
+    864
+  ],
+  "zone_px": {
+    "width": 1536,
+    "height": 864,
+    "size": 420
+  },
+  "camera_size_px": [
+    1920,
+    1080
+  ],
+  "screen_to_camera_homography": [
+    [
+      2.5050752785587584,
+      0.09807431022903361,
+      -548.481195668301
+    ],
+    [
+      0.03921902098495574,
+      2.367445853863481,
+      -473.37195800679604
+    ],
+    [
+      0.00016349584080321624,
+      7.925795349382245e-05,
+      0.9999999999999999
+    ]
+  ],
+  "geometry_rmse_camera_px": 2.624260187149048,
+  "geometry_errors_px": [
+    1.1515122652053833,
+    1.6253716945648193,
+    0.32761910557746887,
+    1.1542102098464966,
+    1.1448923349380493,
+    0.8770862221717834,
+    7.304314613342285,
+    0.5192164778709412,
+    0.9330950975418091
+  ],
+  "spot_peaks_camera_levels": [
+    84.94927978515625,
+    82.37702178955078,
+    74.340576171875,
+    119.3742904663086,
+    120.59457397460938,
+    105.63367462158203,
+    114.19347381591797,
+    88.691650390625,
+    99.19633483886719
+  ],
+  "camera_response": [
+    {
+      "screen_level": 0.0,
+      "camera_mean": 4.587462902069092,
+      "clipped_fraction": 0.0
+    },
+    {
+      "screen_level": 0.25,
+      "camera_mean": 35.54884719848633,
+      "clipped_fraction": 0.0
+    },
+    {
+      "screen_level": 0.5,
+      "camera_mean": 97.73188781738281,
+      "clipped_fraction": 0.0
+    },
+    {
+      "screen_level": 0.75,
+      "camera_mean": 148.6029052734375,
+      "clipped_fraction": 0.0
+    },
+    {
+      "screen_level": 1.0,
+      "camera_mean": 179.16749572753906,
+      "clipped_fraction": 0.0
+    },
+    {
+      "screen_level": 0.5,
+      "camera_mean": 97.39463806152344,
+      "clipped_fraction": 0.0
+    },
+    {
+      "screen_level": 0.25,
+      "camera_mean": 35.50364685058594,
+      "clipped_fraction": 0.0
+    },
+    {
+      "screen_level": 0.75,
+      "camera_mean": 148.50013732910156,
+      "clipped_fraction": 0.0
+    },
+    {
+      "screen_level": 0.0,
+      "camera_mean": 4.589890003204346,
+      "clipped_fraction": 0.0
+    },
+    {
+      "screen_level": 0.5,
+      "camera_mean": 97.42051696777344,
+      "clipped_fraction": 0.0
+    },
+    {
+      "screen_level": 1.0,
+      "camera_mean": 179.30130004882812,
+      "clipped_fraction": 0.0
+    },
+    {
+      "screen_level": 0.0,
+      "camera_mean": 4.654898166656494,
+      "clipped_fraction": 0.0
+    }
+  ],
+  "stability": {
+    "dark_level": 4.611,
+    "white_level": 179.234,
+    "camera_response_span": 174.624,
+    "repeat_deviation": {
+      "0.0": 0.0004,
+      "0.25": 0.0003,
+      "0.5": 0.0019,
+      "0.75": 0.0006,
+      "1.0": 0.0008
+    },
+    "response_curve": [
+      {
+        "screen_level": 0.0,
+        "camera_mean": 4.59
+      },
+      {
+        "screen_level": 0.25,
+        "camera_mean": 35.526
+      },
+      {
+        "screen_level": 0.5,
+        "camera_mean": 97.421
+      },
+      {
+        "screen_level": 0.75,
+        "camera_mean": 148.552
+      },
+      {
+        "screen_level": 1.0,
+        "camera_mean": 179.234
+      }
+    ],
+    "warnings": [],
+    "stable": true
+  },
+  "notes": [
+    "JPEG pixel values are not calibrated linear radiance.",
+    "A homography maps a SCREEN PLANE, not the depth of a hidden object.",
+    "The camera must be manually locked in the Android camera application.",
+    "Calibration invalid after moving camera, changing focus, zoom, resolution or screen geometry."
+  ],
+  "shadow_scan": {
+    "roi_pixels": 885956,
+    "blank_dark_mean_camera_level": 4.689,
+    "object_dark_mean_camera_level": 4.354,
+    "mean_blank_camera_level_in_roi": 94.791,
+    "mean_object_camera_level_in_roi": 81.46,
+    "mean_signed_difference_in_roi": 12.997,
+    "mean_absolute_difference_in_roi": 14.264,
+    "rms_mean_difference_in_roi": 27.109,
+    "repeat_rms_camera_levels": 1.951,
+    "rms_signal_to_repeat_ratio": 13.9,
+    "max_blank_clipped_fraction": 0.0,
+    "patterns": [
+      {
+        "index": 0,
+        "blank_mean_camera_level": 142.016,
+        "blank_signal_above_dark": 137.328,
+        "object_signal_above_dark": 121.899,
+        "mean_blank_minus_object": 15.428,
+        "rms_difference": 36.997,
+        "p95_absolute_difference": 103.0,
+        "clipped_fraction_blank": 0.0
+      },
+      {
+        "index": 1,
+        "blank_mean_camera_level": 96.652,
+        "blank_signal_above_dark": 91.963,
+        "object_signal_above_dark": 75.285,
+        "mean_blank_minus_object": 16.678,
+        "rms_difference": 37.172,
+        "p95_absolute_difference": 108.0,
+        "clipped_fraction_blank": 0.0
+      },
+      {
+        "index": 2,
+        "blank_mean_camera_level": 89.891,
+        "blank_signal_above_dark": 85.203,
+        "object_signal_above_dark": 76.239,
+        "mean_blank_minus_object": 8.964,
+        "rms_difference": 19.719,
+        "p95_absolute_difference": 51.0,
+        "clipped_fraction_blank": 0.0
+      },
+      {
+        "index": 3,
+        "blank_mean_camera_level": 86.939,
+        "blank_signal_above_dark": 82.251,
+        "object_signal_above_dark": 80.821,
+        "mean_blank_minus_object": 1.43,
+        "rms_difference": 6.226,
+        "p95_absolute_difference": 12.0,
+        "clipped_fraction_blank": 0.0
+      },
+      {
+        "index": 4,
+        "blank_mean_camera_level": 91.764,
+        "blank_signal_above_dark": 87.075,
+        "object_signal_above_dark": 71.213,
+        "mean_blank_minus_object": 15.862,
+        "rms_difference": 35.33,
+        "p95_absolute_difference": 102.0,
+        "clipped_fraction_blank": 0.0
+      },
+      {
+        "index": 5,
+        "blank_mean_camera_level": 97.615,
+        "blank_signal_above_dark": 92.927,
+        "object_signal_above_dark": 75.17,
+        "mean_blank_minus_object": 17.757,
+        "rms_difference": 37.217,
+        "p95_absolute_difference": 103.0,
+        "clipped_fraction_blank": 0.0
+      },
+      {
+        "index": 6,
+        "blank_mean_camera_level": 95.405,
+        "blank_signal_above_dark": 90.716,
+        "object_signal_above_dark": 79.911,
+        "mean_blank_minus_object": 10.805,
+        "rms_difference": 25.132,
+        "p95_absolute_difference": 68.0,
+        "clipped_fraction_blank": 0.0
+      },
+      {
+        "index": 7,
+        "blank_mean_camera_level": 97.121,
+        "blank_signal_above_dark": 92.433,
+        "object_signal_above_dark": 79.923,
+        "mean_blank_minus_object": 12.51,
+        "rms_difference": 28.365,
+        "p95_absolute_difference": 74.0,
+        "clipped_fraction_blank": 0.0
+      },
+      {
+        "index": 8,
+        "blank_mean_camera_level": 77.532,
+        "blank_signal_above_dark": 72.844,
+        "object_signal_above_dark": 55.779,
+        "mean_blank_minus_object": 17.064,
+        "rms_difference": 36.656,
+        "p95_absolute_difference": 106.0,
+        "clipped_fraction_blank": 0.0
+      },
+      {
+        "index": 9,
+        "blank_mean_camera_level": 94.498,
+        "blank_signal_above_dark": 89.809,
+        "object_signal_above_dark": 76.613,
+        "mean_blank_minus_object": 13.196,
+        "rms_difference": 30.503,
+        "p95_absolute_difference": 90.0,
+        "clipped_fraction_blank": 0.0
+      },
+      {
+        "index": 10,
+        "blank_mean_camera_level": 87.951,
+        "blank_signal_above_dark": 83.262,
+        "object_signal_above_dark": 68.728,
+        "mean_blank_minus_object": 14.535,
+        "rms_difference": 32.466,
+        "p95_absolute_difference": 90.0,
+        "clipped_fraction_blank": 0.0
+      },
+      {
+        "index": 11,
+        "blank_mean_camera_level": 92.669,
+        "blank_signal_above_dark": 87.98,
+        "object_signal_above_dark": 80.316,
+        "mean_blank_minus_object": 7.665,
+        "rms_difference": 21.857,
+        "p95_absolute_difference": 39.0,
+        "clipped_fraction_blank": 0.0
+      },
+      {
+        "index": 12,
+        "blank_mean_camera_level": 82.809,
+        "blank_signal_above_dark": 78.121,
+        "object_signal_above_dark": 67.798,
+        "mean_blank_minus_object": 10.323,
+        "rms_difference": 27.59,
+        "p95_absolute_difference": 86.0,
+        "clipped_fraction_blank": 0.0
+      },
+      {
+        "index": 13,
+        "blank_mean_camera_level": 96.251,
+        "blank_signal_above_dark": 91.563,
+        "object_signal_above_dark": 77.578,
+        "mean_blank_minus_object": 13.985,
+        "rms_difference": 30.349,
+        "p95_absolute_difference": 87.0,
+        "clipped_fraction_blank": 0.0
+      },
+      {
+        "index": 14,
+        "blank_mean_camera_level": 92.283,
+        "blank_signal_above_dark": 87.594,
+        "object_signal_above_dark": 71.94,
+        "mean_blank_minus_object": 15.654,
+        "rms_difference": 34.604,
+        "p95_absolute_difference": 97.0,
+        "clipped_fraction_blank": 0.0
+      },
+      {
+        "index": 15,
+        "blank_mean_camera_level": 95.266,
+        "blank_signal_above_dark": 90.578,
+        "object_signal_above_dark": 74.481,
+        "mean_blank_minus_object": 16.097,
+        "rms_difference": 35.269,
+        "p95_absolute_difference": 105.0,
+        "clipped_fraction_blank": 0.0
+      }
+    ],
+    "interpretation": "2D camera differential signal from structured illuminations; ROI signal and repeat noise only. NOT quantitative optical attenuation, not an inverse reconstruction, not 3D CT."
+  }
+}
