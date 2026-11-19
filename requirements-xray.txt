@@ -1,0 +1,4 @@
+-r requirements.txt
+# Install a CUDA-enabled PyTorch matching your Python/CUDA setup when available.
+# Plain pip torch can be CPU-only on some combinations.
+torch>=2.3
