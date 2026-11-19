@@ -1,6 +1,6 @@
 # LightScan — monitor + phone camera inverse-imaging laboratory
 
-![pic](pic.png)
+![pic](pic.jpg)
 
 **Milestone 1: real hardware calibration, not yet 3D CT.**
 
