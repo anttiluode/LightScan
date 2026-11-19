@@ -43,6 +43,19 @@ The capture defaults to the `/shot.jpg` endpoint because new snapshots usually a
 
 The `--preview` option shows a small live phone view to help aim and manually focus. **Press Space** in the preview window to begin taking measurements. The preview closes before calibration so that its light cannot contaminate the measurements. On a single-monitor setup, this is particularly useful.
 
+### On-screen guide: no need to see Command Prompt
+
+The full-screen illumination window now includes a **guide across the top**, above the calibrated light square. It displays Stage 1 (screen geometry), Stage 2 (camera brightness) and Stage 3 (blank diffuser / hidden object). Guidance is drawn **outside the measured light square** using a black background and dim text, so it does not replace any of the intended light patterns. The banner stays unchanged during comparable camera captures, avoiding false shadow/geometry signals from changing UI text. Keep the phone fixed and avoid putting objects between it and the screen during Stages 1 and 2.
+
+With `--scan`, you will see two prominent **on-screen pause screens**:
+
+1. **INSERT BLANK DIFFUSER** — fit just the plain frosted sheet to the cradle; click the full-screen LightScan window if necessary, then press **Space** (or Enter) to capture 16 reference light spots.
+2. **INSERT HIDDEN SHAPE** — add a black paper shape between the screen and the diffuser **without moving the diffuser or camera**; press **Space** for 16 more measurements.
+
+There is no longer any `input()` or terminal wait during Stage 3. **Esc or Q cancels**, and the final results screen stays visible until you press Space to close. The console still records the detailed log, but no longer needs to be visible. On small monitors, the light zone is limited to leave room for the top guide.
+
+The UI banner is constant in position and outside the active zone, but can still emit a little stray light; treat every new physical set-up as uncalibrated until the repeatability checks pass.
+
 The tool takes 9 sequential light-spot measurements to determine a robust screen-plane homography, then 12 brightness exposures including repeated levels (and checks for dynamic response, clipping and drift). It writes:
 
 - `runs/first_rig/calibration.json`: screen geometry, camera mapping, response samples and warnings

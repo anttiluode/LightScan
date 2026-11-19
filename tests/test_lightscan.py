@@ -1,13 +1,46 @@
 import unittest
 from pathlib import Path
 import tempfile
+from unittest.mock import patch
 from types import SimpleNamespace
 import numpy as np
 import sys
 sys.path.insert(0,str(Path(__file__).resolve().parents[1]))
-from lightscan import Zone,SimCamera,dot_centroid,fit_geometry,pattern_grid,summarize_levels,execute
+from lightscan import Screen,Zone,SimCamera,dot_centroid,fit_geometry,pattern_grid,summarize_levels,execute
 
 class LightScanTests(unittest.TestCase):
+    def test_guide_banner_never_changes_calibrated_light_square(self):
+        zone=Zone(1536,864,420)
+        # Create a screen without opening a GUI, then exercise its compositing.
+        screen=object.__new__(Screen)
+        screen.zone=zone
+        screen.headless=False
+        screen.guide('STEP 3 / 3  |  HIDDEN SHAPE',
+                     'Put a shape behind the diffuser.', 'SPACE when ready')
+        pattern=zone.full(.5)
+        guided=screen.guided_frame(pattern)
+        self.assertTrue(np.array_equal(guided[zone.y0:zone.y0+zone.size,
+                                              zone.x0:zone.x0+zone.size],
+                                       pattern[zone.y0:zone.y0+zone.size,
+                                               zone.x0:zone.x0+zone.size]))
+        self.assertTrue(np.all(pattern[:80,:]==0))
+        self.assertGreater(int(guided[:80,:].sum()),0)
+        self.assertTrue(np.array_equal(guided[:80,:],screen.guided_frame(zone.full(0))[:80,:]))
+        self.assertTrue(np.all(guided[80:zone.y0,:]==0))
+
+    def test_scan_pause_uses_full_screen_space_not_hidden_terminal(self):
+        zone=Zone(1536,864,420)
+        screen=object.__new__(Screen)
+        screen.zone=zone
+        screen.headless=False
+        shown=[]
+        screen.show=lambda frame: shown.append(frame)
+        with patch('builtins.input', side_effect=AssertionError('terminal prompt used')):
+            with patch('lightscan.cv2.waitKey',side_effect=[-1,32]):
+                screen.wait_for_space('INSERT DIFFUSER', ['Put blank diffuser in cradle.'])
+        self.assertEqual(len(shown),1)
+        self.assertEqual(screen.title,'INSERT DIFFUSER')
+
     def test_dot_localization_and_homography(self):
         z=Zone(960,720,540)
         cam=SimCamera(z)

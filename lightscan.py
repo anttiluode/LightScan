@@ -69,24 +69,94 @@ class Zone:
 
 
 class Screen:
+    """Full-screen light source with guidance kept ABOVE the calibrated zone.
+
+    The screen is the illumination instrument: do not write UI into the light
+    square while measuring. A stable dark banner lives entirely outside it.
+    """
     def __init__(self, zone: Zone, headless: bool, origin: tuple[int,int]=(0,0)):
         self.zone = zone
         self.headless = headless
         self.name = 'LightScan | illumination screen (Esc to abort)'
         self.current = zone.base()
+        self.title = 'LIGHTSCAN  |  READY'
+        self.detail = 'Keep phone and monitor fixed.'
+        self.progress = ''
         if not headless:
             cv2.namedWindow(self.name, cv2.WINDOW_NORMAL)
             cv2.moveWindow(self.name, *origin)
             cv2.resizeWindow(self.name, zone.width, zone.height)
             cv2.setWindowProperty(self.name, cv2.WND_PROP_FULLSCREEN, cv2.WINDOW_FULLSCREEN)
 
+    def guide(self, title: str, detail: str='', progress: str=''):
+        self.title, self.detail, self.progress = title, detail, progress
+
+    @staticmethod
+    def _text(image, msg, x, baseline, max_width, scale=.65, color=(230,240,246), thickness=1):
+        """Fit messages on narrow monitors without a new GUI dependency."""
+        if not msg or max_width <= 0:
+            return
+        face = cv2.FONT_HERSHEY_SIMPLEX
+        actual_width = cv2.getTextSize(msg, face, scale, thickness)[0][0]
+        if actual_width > max_width:
+            scale *= max_width/max(1, actual_width)
+        cv2.putText(image, msg, (int(x),int(baseline)), face, scale, color,
+                    thickness, cv2.LINE_AA)
+
+    def guided_frame(self, frame: np.ndarray) -> np.ndarray:
+        """Overlay guidance outside the illuminated square; don't mutate the pattern."""
+        image = frame.copy()
+        if self.headless:
+            return image
+        # The effective zone size reserves at least 90 px above the square.
+        band = min(82, self.zone.y0-6)
+        if band < 48:
+            raise ValueError('Illumination zone leaves no space for guidance banner')
+        # Black background and dim text reduce stray illumination from the UI.
+        # Most importantly, the banner must NOT change between comparable frames.
+        cv2.rectangle(image,(0,0),(self.zone.width-1,band),(0,0,0),-1)
+        side=22
+        self._text(image, self.title, side, 27, self.zone.width-2*side,
+                   .68, (72,120,125),1)
+        self._text(image, self.detail, side, 51, self.zone.width-2*side,
+                   .52, (105,105,105),1)
+        self._text(image, self.progress or 'ESC: cancel', side, 71,
+                   self.zone.width-2*side, .45, (79,79,79),1)
+        return image
+
     def show(self, frame: np.ndarray):
         self.current = frame
         if not self.headless:
-            cv2.imshow(self.name, frame)
+            cv2.imshow(self.name, self.guided_frame(frame))
             k = cv2.waitKey(40) & 255
-            if k == 27:
-                raise KeyboardInterrupt('Escape pressed')
+            if k in (27,ord('q')):
+                raise KeyboardInterrupt('Escape/Q pressed')
+
+    def wait_for_space(self, title: str, instructions: list[str]):
+        """Visible, keyboard-controlled pause. Never block on an obscured terminal."""
+        if self.headless:
+            return
+        self.guide(title, 'Follow the steps in the middle of the screen.',
+                   'CLICK this window if needed, then press SPACE | ESC cancels')
+        image=self.zone.base()
+        x0, y0, size=self.zone.x0,self.zone.y0,self.zone.size
+        margin=max(10,int(size*.05))
+        left=x0+margin; right=x0+size-margin
+        top=y0+int(size*.14); bottom=y0+int(size*.85)
+        cv2.rectangle(image,(left,top),(right,bottom),(25,39,50),-1)
+        cv2.rectangle(image,(left,top),(right,bottom),(82,154,168),2)
+        w=right-left-30
+        self._text(image,'WHAT TO DO',left+15,top+33,w,.68,(133,226,239),2)
+        gap=max(28,int((bottom-top-92)/max(1,len(instructions))))
+        for i,line in enumerate(instructions):
+            self._text(image,line,left+15,top+70+i*gap,w,.65,(244,244,245),1)
+        self._text(image,'SPACE / ENTER: continue',left+15,bottom-22,w,
+                   .57,(128,223,164),2)
+        self.show(image)
+        while True:
+            key=cv2.waitKey(60)&255
+            if key in (32,13):return
+            if key in (27,ord('q')):raise KeyboardInterrupt('User cancelled scan')
 
     def close(self):
         if not self.headless:
@@ -253,6 +323,9 @@ def write_image(path:Path,img:np.ndarray):
 
 def stage_geometry(zone, screen,cam,out,settle,samples):
     print('\nSTAGE 1 / Screen-to-camera mapping (nothing between phone and screen)')
+    screen.guide('STEP 1 / 3  |  FIND THE SCREEN',
+                 'Nothing between phone and monitor. Do not move either.',
+                 'Measuring 9 light positions automatically...')
     dark = capture_after(screen,cam,zone.base(),settle,samples)
     uv=pattern_grid(3)
     detections=[]; peaks=[]
@@ -278,6 +351,9 @@ def stage_geometry(zone, screen,cam,out,settle,samples):
 
 def stage_exposure(zone,screen,cam,H,out,settle,samples):
     print('\nSTAGE 2 / Camera response & repeatability (no object yet)')
+    screen.guide('STEP 2 / 3  |  CAMERA BRIGHTNESS',
+                 'Keep the setup EMPTY and still. Light levels will change.',
+                 'Checking exposure stability; automatic, no action needed...')
     mask=roi_mask(zone,H,cam.capture(zone.base()).shape)
     levels=[0., .25, .5, .75, 1., .5, .25, .75, 0., .5, 1., 0.]
     result=[]
@@ -308,16 +384,26 @@ def stage_scan(zone,screen,cam,out,settle,samples,sim):
     """Optional real *2D differential* imaging with a fixed diffuser; no depth claim."""
     print('\nSTAGE 3 / Differential shadow measurement (2D, NOT CT)')
     if not sim:
-        screen.show(zone.base())
-        input('Install BLANK diffuser only. Keep phone fixed. Press Enter to capture 4x4 reference... ')
+        screen.wait_for_space('STEP 3 / 3  |  BLANK REFERENCE', [
+            'Insert BLANK diffuser only.',
+            'Keep phone and cradle fixed.',
+            'No hidden shape yet.'])
     pts=pattern_grid(4)
     base=[]; obj=[]
+    screen.guide('STEP 3 / 3  |  MEASURING',
+                 'Do not move camera or diffuser; scanning light patterns.',
+                 'Automatic 16-pattern scan: please wait...')
     for i,p in enumerate(pts,1):
         base.append(capture_after(screen,cam,zone.dot(p),settle,samples,inserted=False))
         print(f'  blank {i:02d}/{len(pts)}')
     if not sim:
-        screen.show(zone.base())
-        input('Insert hidden object WITHOUT moving camera or diffuser. Press Enter to rescan... ')
+        screen.wait_for_space('STEP 3 / 3  |  HIDDEN SHAPE', [
+            'Put BLACK shape behind diffuser.',
+            'Between monitor and diffuser.',
+            'Do NOT move diffuser or phone.'])
+    screen.guide('STEP 3 / 3  |  MEASURING',
+                 'Do not move camera or diffuser; scanning light patterns.',
+                 'Automatic 16-pattern scan: please wait...')
     for i,p in enumerate(pts,1):
         obj.append(capture_after(screen,cam,zone.dot(p),settle,samples,inserted=True))
         print(f'  object {i:02d}/{len(pts)}')
@@ -350,6 +436,9 @@ def rig_preview(zone:Zone,screen:Screen,cam):
     Setup preview is intentionally destroyed before radiometric measurements.
     """
     name='LightScan | phone preview: Space=calibrate, Q=quit'
+    screen.guide('SETUP  |  PHONE PREVIEW',
+                 'Adjust the phone image, then press SPACE in the small preview.',
+                 'Q or ESC cancels. Keep the space between phone and screen empty.')
     screen.show(zone.board())
     cv2.namedWindow(name,cv2.WINDOW_NORMAL)
     target_width=min(410,max(240,zone.x0-40))
@@ -374,7 +463,8 @@ def rig_preview(zone:Zone,screen:Screen,cam):
 
 def execute(args):
     w,h=screen_dimensions(args)
-    size=min(args.zone_px,w-60,h-60)
+    # Reserve vertical space above the illumination zone for visible guidance.
+    size=min(args.zone_px,w-60,h-180)
     if size < 220: raise ValueError('Light zone must be at least 220 screen pixels')
     zone=Zone(w,h,size)
     out=Path(args.output);out.mkdir(parents=True,exist_ok=True)
@@ -400,10 +490,19 @@ def execute(args):
                      'Calibration is invalid after moving camera, changing focus, resolution, exposure or screen settings.']}
         if args.scan:
             report['shadow_scan']=stage_scan(zone,screen,cam,out,args.settle,args.samples,args.sim)
+        screen.guide('FINISHED  |  SAVING RESULTS', 'Writing calibration and scan files...',
+                     'The screen will show a completion message.')
         screen.show(zone.base())
         (out/'calibration.json').write_text(json.dumps(report,indent=2)+'\n',encoding='utf8')
         print(f'\nSaved: {out.resolve() / "calibration.json"}')
-        print('STAGE 1+2 COMPLETED. This is not yet 3D scanning.')
+        print('STAGES 1-3 COMPLETED. This is not 3D scanning.' if args.scan else
+              'STAGES 1-2 COMPLETED. This is not yet 3D scanning.')
+        if not screen.headless:
+            status='PASS' if resp['stable'] else 'CHECK CAMERA STABILITY WARNING'
+            summary=[f'Geometry: {rmse:.2f} px | Brightness: {status}',
+                     'Scan files saved.' if args.scan else 'Calibration files saved.',
+                     'This does NOT yet reconstruct 3D.']
+            screen.wait_for_space('FINISHED  |  RESULTS SAVED',summary)
         return report
     finally:
         cam.close()
