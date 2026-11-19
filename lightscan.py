@@ -55,6 +55,28 @@ class Zone:
                    (int(brightness*255),)*3, -1, cv2.LINE_AA)
         return img
 
+    def structured(self, index: int, level: float = 0.85) -> np.ndarray:
+        """A 4x4 Walsh/Hadamard illumination pattern, one full, 15 half-lit.
+
+        Macrocell 0..15 is illuminated when the parity of index & cell is even.
+        The 15 non-DC patterns each illuminate exactly half the active square.
+        Their complementary sets make different hidden regions observable.
+        """
+        if not (0 <= index < 16):
+            raise ValueError('Structured pattern index must be 0..15')
+        img = self.base()
+        bright = int(round(255 * float(np.clip(level, 0, 1))))
+        # Partition the active area without gaps or border spill.
+        for cell in range(16):
+            if ((index & cell).bit_count() & 1) == 0:
+                row, col = divmod(cell, 4)
+                x1 = self.x0 + (col*self.size)//4
+                x2 = self.x0 + ((col+1)*self.size)//4
+                y1 = self.y0 + (row*self.size)//4
+                y2 = self.y0 + ((row+1)*self.size)//4
+                img[y1:y2, x1:x2] = bright
+        return img
+
     def board(self) -> np.ndarray:
         img = self.base()
         sq = max(5, self.size // 12)
@@ -380,40 +402,180 @@ def diff_montage(a:list[np.ndarray], b:list[np.ndarray]):
     return cv2.applyColorMap(norm,cv2.COLORMAP_TURBO), float(np.mean(delta)),mx,hot_fraction
 
 
-def stage_scan(zone,screen,cam,out,settle,samples,sim):
-    """Optional real *2D differential* imaging with a fixed diffuser; no depth claim."""
-    print('\nSTAGE 3 / Differential shadow measurement (2D, NOT CT)')
+def scan_region(zone:Zone,H:np.ndarray,shape:tuple[int,...]):
+    """Mask the projected full illumination square, allowing diffuser blur.
+
+    The saved homography is the MONITOR PLANE, not the diffuser plane; this is
+    a coarse measurement ROI, not a physical registration of a hidden object.
+    """
+    corners=cv2.perspectiveTransform(zone.corners().reshape(-1,1,2),H).reshape(-1,2)
+    center=np.mean(corners,axis=0)
+    expanded=center+(corners-center)*1.12
+    mask=np.zeros(shape[:2],np.uint8)
+    cv2.fillConvexPoly(mask,np.int32(np.rint(expanded)),255)
+    pixels=int(np.count_nonzero(mask))
+    if pixels<1000:
+        raise ValueError('Saved calibration projects outside current camera frame; recheck the rig')
+    inside=sum(0 <= x < shape[1] and 0 <= y < shape[0] for x,y in corners)
+    if inside < 4:
+        raise ValueError('Illumination zone is cropped by the camera: adjust the rig or zone and recalibrate')
+    return mask.astype(bool)
+
+
+def load_calibration(path:Path,zone:Zone,camera_shape:tuple[int,...]):
+    """Reuse saved geometry at a different MANUAL exposure, never photometry.
+
+    Fails on resolution, screen or zone changes. Physical movement/focus changes
+    cannot be detected perfectly and must be verified by the operator.
+    """
+    report=json.loads(path.read_text(encoding='utf8'))
+    if report.get('schema_version')!=1:
+        raise ValueError('Unknown calibration schema')
+    if report.get('screen_size_px')!=[zone.width,zone.height]:
+        raise ValueError('Screen resolution changed since calibration')
+    z=report.get('zone_px',{})
+    if [z.get(k) for k in ('width','height','size')]!=[zone.width,zone.height,zone.size]:
+        raise ValueError('Calibration zone differs; match --zone-px to the original run')
+    if 'camera_size_px' in report and report['camera_size_px'] != [camera_shape[1],camera_shape[0]]:
+        raise ValueError('Phone camera resolution changed since calibration')
+    H=np.asarray(report.get('screen_to_camera_homography'),dtype=np.float64)
+    if H.shape!=(3,3) or not np.all(np.isfinite(H)):
+        raise ValueError('Invalid saved screen-to-camera homography')
+    _=scan_region(zone,H,camera_shape)
+    return H,report
+
+
+def probe_metrics(blank,object_frames,dark_blank,dark_object,roi,blank_repeat,
+                  object_repeat):
+    """Contrast in the useful camera ROI, not diluted across the entire frame.
+
+    JPEG camera levels are nonlinear. Dark subtraction is diagnostic only;
+    this does NOT establish absolute optical attenuation or radiance.
+    """
+    a=np.stack([luminance(im) for im in blank]).astype(np.float32)
+    b=np.stack([luminance(im) for im in object_frames]).astype(np.float32)
+    db=luminance(dark_blank)
+    do=luminance(dark_object)
+    # Keep signed differences: white and black camera offsets may shift.
+    aa=a-db[None]
+    bb=b-do[None]
+    delta=aa-bb
+    signed=np.mean(delta,axis=0)
+    mask=roi
+    # Average signed changes for each structured illumination.
+    per_pattern=[]
+    for k in range(len(blank)):
+        dd=delta[k][mask]
+        v=a[k][mask]
+        per_pattern.append({
+            'index':k,
+            'blank_mean_camera_level':round(float(np.mean(v)),3),
+            'blank_signal_above_dark':round(float(np.mean(aa[k][mask])),3),
+            'object_signal_above_dark':round(float(np.mean(bb[k][mask])),3),
+            'mean_blank_minus_object':round(float(np.mean(dd)),3),
+            'rms_difference':round(float(np.sqrt(np.mean(dd**2))),3),
+            'p95_absolute_difference':round(float(np.percentile(np.abs(dd),95)),3),
+            'clipped_fraction_blank':round(float(np.mean(v>=250)),5)})
+    reference_noise=np.sqrt(np.mean((luminance(blank[0])[mask]-
+                                     luminance(blank_repeat)[mask])**2))
+    object_noise=np.sqrt(np.mean((luminance(object_frames[0])[mask]-
+                                  luminance(object_repeat)[mask])**2))
+    repeat_rms=float(max(reference_noise,object_noise))
+    # Signal/noise comparison uses repeat controls, not an arbitrary threshold.
+    # Red = illumination was reduced by the object; blue = illumination grew.
+    # Keep signed changes instead of silently erasing inverse-scattering effects.
+    scale=max(float(np.percentile(np.abs(signed[mask]),99.5)),1.)
+    image=np.zeros((*mask.shape,3),np.uint8)
+    image[...,2][mask]=np.uint8(255*np.clip(signed[mask]/scale,0.,1.))
+    image[...,0][mask]=np.uint8(255*np.clip(-signed[mask]/scale,0.,1.))
+    avg=np.mean(a,axis=0)
+    obj_avg=np.mean(b,axis=0)
+    effective_diff=float(np.sqrt(np.mean(np.mean(delta,axis=0)[mask]**2)))
+    return image, {
+        'roi_pixels':int(np.count_nonzero(mask)),
+        'blank_dark_mean_camera_level':round(float(np.mean(db[mask])),3),
+        'object_dark_mean_camera_level':round(float(np.mean(do[mask])),3),
+        'mean_blank_camera_level_in_roi':round(float(np.mean(a[:,mask])),3),
+        'mean_object_camera_level_in_roi':round(float(np.mean(b[:,mask])),3),
+        'mean_signed_difference_in_roi':round(float(np.mean(delta[:,mask])),3),
+        'mean_absolute_difference_in_roi':round(float(np.mean(np.abs(delta[:,mask]))),3),
+        'rms_mean_difference_in_roi':round(effective_diff,3),
+        'repeat_rms_camera_levels':round(repeat_rms,3),
+        'rms_signal_to_repeat_ratio':round(effective_diff/max(repeat_rms,0.15),2),
+        'max_blank_clipped_fraction':round(float(max(x['clipped_fraction_blank'] for x in per_pattern)),5),
+        'patterns':per_pattern,
+        'interpretation':('2D camera differential signal from structured illuminations; '
+            'ROI signal and repeat noise only. NOT quantitative optical attenuation, '
+            'not an inverse reconstruction, not 3D CT.')},avg,obj_avg
+
+
+def stage_scan(zone,screen,cam,out,settle,samples,sim,H,pattern_level=.85,save_frames=False):
+    """Strong 4x4 Hadamard probes, repeated-white controls, explicit camera ROI."""
+    print('\nSTAGE 3 / Strong structured-light differential scan (2D, NOT CT)')
+    pts=[zone.structured(i,pattern_level) for i in range(16)]
     if not sim:
-        screen.wait_for_space('STEP 3 / 3  |  BLANK REFERENCE', [
-            'Insert BLANK diffuser only.',
-            'Keep phone and cradle fixed.',
-            'No hidden shape yet.'])
-    pts=pattern_grid(4)
-    base=[]; obj=[]
-    screen.guide('STEP 3 / 3  |  MEASURING',
-                 'Do not move camera or diffuser; scanning light patterns.',
-                 'Automatic 16-pattern scan: please wait...')
-    for i,p in enumerate(pts,1):
-        base.append(capture_after(screen,cam,zone.dot(p),settle,samples,inserted=False))
-        print(f'  blank {i:02d}/{len(pts)}')
+        screen.wait_for_space('STAGE 3 / 3  |  BLANK DIFFUSER', [
+            'Install BLANK diffuser; NO hidden shape.',
+            'Camera and diffuser must stay fixed.',
+            'Use manual ISO/exposure; do not change them during scan.',
+            'Press SPACE when ready.'])
+    screen.guide('STAGE 3 / 3  |  MEASURING BLANK',
+                 'Bright structured patterns. Do not move the diffuser.',
+                 'Recording blank and repeated white reference...')
+    dark_blank=capture_after(screen,cam,zone.base(),settle,samples,inserted=False)
+    roi=scan_region(zone,H,dark_blank.shape)
+    blank=[]
+    for k,pattern in enumerate(pts):
+        frame=capture_after(screen,cam,pattern,settle,samples,inserted=False)
+        blank.append(frame)
+        v=luminance(frame)[roi]
+        if k in (0,1,7,15):
+            print(f'  blank {k+1:02d}/16 | ROI mean {np.mean(v):.1f}/255 '
+                  f'| max {np.max(v):.0f} | clipped {(v>=250).mean():.2%}')
+    blank_repeat=capture_after(screen,cam,pts[0],settle,samples,inserted=False)
     if not sim:
-        screen.wait_for_space('STEP 3 / 3  |  HIDDEN SHAPE', [
-            'Put BLACK shape behind diffuser.',
-            'Between monitor and diffuser.',
-            'Do NOT move diffuser or phone.'])
-    screen.guide('STEP 3 / 3  |  MEASURING',
-                 'Do not move camera or diffuser; scanning light patterns.',
-                 'Automatic 16-pattern scan: please wait...')
-    for i,p in enumerate(pts,1):
-        obj.append(capture_after(screen,cam,zone.dot(p),settle,samples,inserted=True))
-        print(f'  object {i:02d}/{len(pts)}')
-    heat,change,display_scale,hot_fraction=diff_montage(base,obj)
+        screen.wait_for_space('STAGE 3 / 3  |  INSERT HIDDEN OBJECT', [
+            'Keep the diffuser and camera FIXED.',
+            'Put BLACK shape behind the diffuser.',
+            'Do not change ISO, shutter, focus or monitor settings.',
+            'Press SPACE to compare against the blank frames.'])
+    screen.guide('STAGE 3 / 3  |  MEASURING OBJECT',
+                 'Do not move camera or diffuser; scanning 16 broad patterns.',
+                 'Recording object and repeated white reference...')
+    dark_object=capture_after(screen,cam,zone.base(),settle,samples,inserted=True)
+    object_frames=[]
+    for k,pattern in enumerate(pts):
+        frame=capture_after(screen,cam,pattern,settle,samples,inserted=True)
+        object_frames.append(frame)
+        v=luminance(frame)[roi]
+        if k in (0,1,7,15):
+            print(f'  object {k+1:02d}/16 | ROI mean {np.mean(v):.1f}/255 '
+                  f'| max {np.max(v):.0f} | clipped {(v>=250).mean():.2%}')
+    object_repeat=capture_after(screen,cam,pts[0],settle,samples,inserted=True)
+    heat,report,blank_mean,obj_mean=probe_metrics(blank,object_frames,dark_blank,
+                              dark_object,roi,blank_repeat,object_repeat)
     write_image(out/'03_shadow_difference.png',heat)
-    write_image(out/'03_blank_mean.png',np.uint8(np.mean(np.stack(base),axis=0)))
-    write_image(out/'03_object_mean.png',np.uint8(np.mean(np.stack(obj),axis=0)))
-    print(f'  Mean attenuation change: {change:.2f} camera levels; heatmap scale {display_scale:.2f}; hot pixels {hot_fraction:.1%}')
-    return {'mean_camera_level_difference':change,'display_scale':display_scale,'hot_pixel_fraction':hot_fraction,
-            'interpretation':'Differential 2D transmission/shadow signal only. NOT bead-depth or 3D reconstruction.'}
+    write_image(out/'03_blank_mean.png',np.uint8(blank_mean))
+    write_image(out/'03_object_mean.png',np.uint8(obj_mean))
+    write_image(out/'03_roi_mask.png',np.uint8(roi)*255)
+    if save_frames:
+        frames=out/'frames'; frames.mkdir(exist_ok=True)
+        for prefix,images in [('blank',blank),('object',object_frames)]:
+            for k,img in enumerate(images):write_image(frames/f'{prefix}_{k:02d}.png',img)
+        for label,img in [('blank_dark',dark_blank),('object_dark',dark_object),
+                           ('blank_repeat',blank_repeat),('object_repeat',object_repeat)]:
+            write_image(frames/f'{label}.png',img)
+        # Source patterns are generated deterministically from index/level/zone.
+    print(f'  Blank ROI camera mean: {report["mean_blank_camera_level_in_roi"]:.2f}/255')
+    print(f'  Blank-minus-object mean (ROI): {report["mean_signed_difference_in_roi"]:.2f} camera levels')
+    print(f'  Mean ABS difference (ROI): {report["mean_absolute_difference_in_roi"]:.2f} levels')
+    print(f'  Repeat white-pattern RMS: {report["repeat_rms_camera_levels"]:.2f} levels')
+    print(f'  Signal / repeat RMS: {report["rms_signal_to_repeat_ratio"]:.2f} (diagnostic only)')
+    if report['max_blank_clipped_fraction']>.02:
+        print('  WARNING: >2% clipping in blank; lower ISO or exposure and rerun scan')
+    if report['mean_blank_camera_level_in_roi']<20:
+        print('  WARNING: blank scan is very dim; increase light safely, avoid clipping')
+    return report
 
 
 def screen_dimensions(args):
@@ -463,50 +625,76 @@ def rig_preview(zone:Zone,screen:Screen,cam):
 
 def execute(args):
     w,h=screen_dimensions(args)
-    # Reserve vertical space above the illumination zone for visible guidance.
+    # Keep the effective size/zone deterministic across calibration and scan.
     size=min(args.zone_px,w-60,h-180)
-    if size < 220: raise ValueError('Light zone must be at least 220 screen pixels')
+    if size<220:raise ValueError('Light zone must be at least 220 screen pixels')
     zone=Zone(w,h,size)
     out=Path(args.output);out.mkdir(parents=True,exist_ok=True)
     screen=Screen(zone,args.headless,(args.origin_x,args.origin_y))
     cam=SimCamera(zone,ae=args.sim_auto_exposure) if args.sim else IPCamera(args.url,args.camera_mode)
     try:
-        if args.preview and not screen.headless:
+        if args.preview and not screen.headless and not args.scan_only:
             rig_preview(zone,screen,cam)
-        H,rmse,errors,peaks=stage_geometry(zone,screen,cam,out,args.settle,args.samples)
-        raw,resp=stage_exposure(zone,screen,cam,H,out,args.settle,args.samples)
-        report={
-            'schema_version':1,'created_utc':datetime.now(timezone.utc).isoformat(),
-            'mode':'simulated' if args.sim else 'physical',
-            'camera_source':'synthetic' if args.sim else ('IP Webcam '+args.camera_mode),
-            'screen_size_px':[w,h],'zone_px':asdict(zone),
-            'screen_to_camera_homography':H.tolist(),
-            'geometry_rmse_camera_px':rmse,'geometry_errors_px':errors.tolist(),
-            'spot_peaks_camera_levels':peaks,
-            'camera_response':raw,'stability':resp,
-            'notes':['JPEG pixel values are not calibrated linear radiance.',
-                     'A homography maps a SCREEN PLANE, not the depth of a hidden object.',
-                     'The camera must be manually locked in the Android camera application; OpenCV cannot reliably do that over IP Webcam.',
-                     'Calibration is invalid after moving camera, changing focus, resolution, exposure or screen settings.']}
-        if args.scan:
-            report['shadow_scan']=stage_scan(zone,screen,cam,out,args.settle,args.samples,args.sim)
-        screen.guide('FINISHED  |  SAVING RESULTS', 'Writing calibration and scan files...',
+        if args.scan_only:
+            if not args.calibration:
+                raise ValueError('--scan-only requires --calibration path/to/calibration.json')
+            frame=cam.capture(zone.base())
+            H,cal=load_calibration(Path(args.calibration),zone,frame.shape)
+            print(f'REUSED SAVED GEOMETRY from {args.calibration}; no naked-screen calibration.')
+            print('Only geometry reused. Prior ISO/exposure brightness response is INVALID now.')
+            print('Verify phone/resolution/zoom/focus/position have NOT changed.')
+            report={
+                'schema_version':1,'created_utc':datetime.now(timezone.utc).isoformat(),
+                'mode':'simulated' if args.sim else 'physical',
+                'camera_source':'synthetic' if args.sim else ('IP Webcam '+args.camera_mode),
+                'screen_size_px':[w,h],'zone_px':asdict(zone),
+                'camera_size_px':[frame.shape[1],frame.shape[0]],
+                'screen_to_camera_homography':H.tolist(),
+                'geometry_source':str(args.calibration),
+                'geometry_rmse_camera_px':cal.get('geometry_rmse_camera_px'),
+                'notes':['Reused monitor-plane homography only. Current exposure is NOT calibrated.',
+                         'Do NOT infer depth or absolute optical absorption from this scan.']}
+        else:
+            H,rmse,errors,peaks=stage_geometry(zone,screen,cam,out,args.settle,args.samples)
+            raw,resp=stage_exposure(zone,screen,cam,H,out,args.settle,args.samples)
+            frame=cam.capture(zone.base())
+            report={
+                'schema_version':1,'created_utc':datetime.now(timezone.utc).isoformat(),
+                'mode':'simulated' if args.sim else 'physical',
+                'camera_source':'synthetic' if args.sim else ('IP Webcam '+args.camera_mode),
+                'screen_size_px':[w,h],'zone_px':asdict(zone),
+                'camera_size_px':[frame.shape[1],frame.shape[0]],
+                'screen_to_camera_homography':H.tolist(),
+                'geometry_rmse_camera_px':rmse,'geometry_errors_px':errors.tolist(),
+                'spot_peaks_camera_levels':peaks,
+                'camera_response':raw,'stability':resp,
+                'notes':['JPEG pixel values are not calibrated linear radiance.',
+                         'A homography maps a SCREEN PLANE, not the depth of a hidden object.',
+                         'The camera must be manually locked in the Android camera application.',
+                         'Calibration invalid after moving camera, changing focus, zoom, resolution or screen geometry.']}
+        if args.scan or args.scan_only:
+            report['shadow_scan']=stage_scan(zone,screen,cam,out,args.settle,args.samples,
+                            args.sim,H,args.pattern_level,args.save_frames)
+        screen.guide('FINISHED  |  SAVING RESULTS','Writing calibration and scan files...',
                      'The screen will show a completion message.')
         screen.show(zone.base())
         (out/'calibration.json').write_text(json.dumps(report,indent=2)+'\n',encoding='utf8')
         print(f'\nSaved: {out.resolve() / "calibration.json"}')
-        print('STAGES 1-3 COMPLETED. This is not 3D scanning.' if args.scan else
-              'STAGES 1-2 COMPLETED. This is not yet 3D scanning.')
+        print('STAGE 3 COMPLETED. Differential measurement, NOT 3D scanning.' if (args.scan or args.scan_only) else
+              'STAGES 1-2 COMPLETED. No inverse reconstruction yet.')
         if not screen.headless:
-            status='PASS' if resp['stable'] else 'CHECK CAMERA STABILITY WARNING'
-            summary=[f'Geometry: {rmse:.2f} px | Brightness: {status}',
-                     'Scan files saved.' if args.scan else 'Calibration files saved.',
-                     'This does NOT yet reconstruct 3D.']
+            if args.scan or args.scan_only:
+                info=report['shadow_scan']
+                summary=[f'Blank mean: {info["mean_blank_camera_level_in_roi"]:.1f} / 255',
+                         f'Abs diff: {info["mean_absolute_difference_in_roi"]:.2f} | repeat RMS: {info["repeat_rms_camera_levels"]:.2f}',
+                         'Shadow images + report saved. NOT a 3D reconstruction.']
+            else:
+                summary=[f'Geometry: {report["geometry_rmse_camera_px"]:.2f} px',
+                         'Calibration files saved.','This does NOT reconstruct 3D.']
             screen.wait_for_space('FINISHED  |  RESULTS SAVED',summary)
         return report
     finally:
-        cam.close()
-        screen.close()
+        cam.close();screen.close()
 
 
 def parse_args():
@@ -521,7 +709,11 @@ def parse_args():
     ap.add_argument('--settle',type=float,default=.65,help='Wait between pattern change and camera sample; increase for IP/network lag')
     ap.add_argument('--samples',type=int,default=2,help='Frames to median per pattern')
     ap.add_argument('--output',default='runs/rig_001')
-    ap.add_argument('--scan',action='store_true',help='Optional 4x4 blank vs object differential 2D probe')
+    ap.add_argument('--scan',action='store_true',help='Scan with 16 broad 4x4 Walsh/Hadamard patterns after fresh calibration')
+    ap.add_argument('--scan-only',action='store_true',help='Skip bare-screen calibration; reuse saved homography and scan diffuser')
+    ap.add_argument('--calibration',default='',help='Saved rig_locked/calibration.json for --scan-only (geometry only)')
+    ap.add_argument('--pattern-level',type=float,default=.85,help='Peak pattern white level, 0.1..1 (reduce if clipping)')
+    ap.add_argument('--save-frames',action='store_true',help='Save all raw blank/object frames for later inverse solver')
     ap.add_argument('--preview',action='store_true',help='Interactive live camera preview on screen before calibrating')
     ap.add_argument('--sim',action='store_true',help='Synthetic phone feed; does not test real camera')
     ap.add_argument('--sim-auto-exposure',action='store_true',help='Deliberately faulty simulated exposure response')
@@ -535,9 +727,12 @@ if __name__=='__main__':
         raise SystemExit('Pass the phone stream base address using --url http://PHONE_IP:8080/')
     if args.headless and not args.sim:
         raise SystemExit('--headless requires --sim (physical patterns need a real display)')
+    if not .1<=args.pattern_level<=1.0:
+        raise SystemExit('--pattern-level must be in 0.1..1.0')
     if not args.sim:
         print('REAL CAPTURE: lock focus/exposure/white balance on PHONE before starting; use dim room.')
-        print('No object during stage 1 or stage 2. Phone and monitor must not move.')
+        print('Scan-only mode: blank diffuser may already be installed.' if args.scan_only else
+              'No object during stage 1 or stage 2. Phone and monitor must not move.')
         print('Camera network access is LOCAL to this Python process; no images uploaded.')
     try:
         execute(args)

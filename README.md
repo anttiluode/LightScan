@@ -1,7 +1,5 @@
 # LightScan — monitor + phone camera inverse-imaging laboratory
 
-![pic](pic.jpg)
-
 **Milestone 1: real hardware calibration, not yet 3D CT.**
 
 This repo is the first physical measurement instrument on the way toward a low-cost optical inverse problem: a PC monitor emits known illumination patterns, a fixed Samsung phone running **IP Webcam** captures their appearance, and LightScan measures geometric mapping and checks photometric repeatability before any attempt to solve for a hidden object.
@@ -29,8 +27,6 @@ Built from the research direction of [Moon](https://github.com/anttiluode/Moon) 
 - The phone and computer must be on the same reachable local network. The IP address is local to your LAN; this cloud assistant cannot connect to it.
 
 ## Windows quick start
-
-![pic](pic2.jpg)
 
 Check from **your PC**, in a browser, that the phone's IP Webcam service works at `http://PHONE_IP:8080/`. In particular try the snapshot URL `http://PHONE_IP:8080/shot.jpg` or the video stream `http://PHONE_IP:8080/video`.
 
@@ -102,3 +98,54 @@ Most phone streaming apps emit 8-bit JPEG after proprietary exposure, white bala
 5. **Hidden-object challenge (NOT IMPLEMENTED):** blind, independently known bead position and depth; repeated samples and no-leak controls.
 
 **Safety:** do not shine high-power lights at eyes or use UV sources; keep liquids, melted wax and pressure away from electronics. The project is an optical experiment, not medical imaging.
+
+## Stage 3B — strong-light diffuser scan without repeating empty-screen calibration
+
+Use this if you have **already successfully calibrated the empty monitor** and
+have not moved the phone, changed the focus/zoom, or changed screen/camera
+resolution. For a diffuser, set **manual ISO and shutter on the phone** until
+its glow is measurable but not clipped; quality 90–95% reduces JPEG artifacts.
+Changing ISO/exposure is fine here because we reuse **geometry only**. Previous
+brightness-response values do not remain valid at the new exposure.
+
+Keep the diffuser cradle installed before running. LightScan's full-screen
+instructions tell you when to insert the hidden shape; no terminal is needed.
+
+```bat
+cd /d E:\DocsHouse\1065\LightScan
+git pull --ff-only
+python3.13 lightscan.py --url http://192.168.1.157:8080/ --zone-px 420 --scan-only --calibration runs\rig_locked\calibration.json --settle 1.5 --samples 3 --pattern-level 0.85 --save-frames --output runs\diffuser_bright_001
+```
+
+- `--scan-only` skips Stage 1/2 so the bare monitor is never exposed to the
+  brighter diffuser-optimized camera settings.
+- `--calibration` must point to the **real, saved** `rig_locked/calibration.json`.
+  A screen/zone/camera resolution mismatch aborts. Changing exposure leaves
+  geometry unchanged, but **any physical camera or focus movement needs a new
+  geometric calibration** at a safe lower exposure.
+- `--zone-px 420` must match the successful empty-screen run.
+- The sixteen patterns are one whole-square white exposure and 15 half-lit
+  4×4 Hadamard masks (rather than 16 tiny dots). If the full-white frame clips,
+  use `--pattern-level 0.65` or lower manual ISO/shutter and restart the scan.
+- The on-screen instructions ask for **blank diffuser first**, then inserting
+  a dark shape between monitor and diffuser *without moving either*.
+- The report now prints per-pattern **blank camera mean within the mapped area**,
+  difference magnitude, the repeated-white-pattern RMS measurement noise, and
+  clipped fraction. `0.07` previously referred to the average over the whole
+  camera image and by itself did not establish that the shadow was absent.
+- `03_shadow_difference.png` shows **red** for less detected light with the
+  object, **blue** for more. `03_roi_mask.png` shows the evaluated camera area.
+- `--save-frames` writes original JPEG-decoded camera frames as PNG into
+  `frames/` to support later inversion, without discarding image detail.
+
+The 16 frames are not yet inverted into a hidden object. They are measured
+camera responses to specified light patterns. The next milestone is a
+validated forward model that predicts held-out light patterns, then actual
+reconstruction. Reference-frame repeatability measures noise *within* a scan;
+it cannot by itself exclude a change in illumination or diffuser placement
+while inserting the object. For a negative control, repeat this run **without
+adding any object** during the second phase and compare the resulting difference.
+
+The camera response after JPEG is nonlinear. Subtracting dark frames does not
+make these pixel values physically calibrated radiance. Do not report
+quantitative absorption or 3D position from them yet.
