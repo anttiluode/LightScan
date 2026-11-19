@@ -1,5 +1,7 @@
 # LightScan — See Through the Diffuser
 
+![pic](ff.jpg)
+
 **One experiment.** Put a fixed diffuser in front of a PC monitor, point a Samsung running IP Webcam at it, and ask whether the camera signal can reconstruct **new images shown on the monitor**. No 3D/CT claims, no hidden-object scan, no old calibration file needed.
 
 [**Try the public optical sandbox**](https://anttiluode.github.io/LightScan/) · [Code](see_through.py) · [Prior experiments](docs/previous_experiments.md)
