@@ -1,0 +1,162 @@
+{
+  "schema_version": 1,
+  "created_utc": "2026-11-19T06:20:57.757426+00:00",
+  "mode": "physical",
+  "camera_source": "IP Webcam shot",
+  "screen_size_px": [
+    1536,
+    864
+  ],
+  "zone_px": {
+    "width": 1536,
+    "height": 864,
+    "size": 540
+  },
+  "screen_to_camera_homography": [
+    [
+      2.2521517883188875,
+      0.10163682513261353,
+      -434.43143073036015
+    ],
+    [
+      0.024838751031069518,
+      2.227928299955251,
+      -425.70869262168156
+    ],
+    [
+      7.652084897611149e-05,
+      9.286684897304012e-05,
+      0.9999999999999999
+    ]
+  ],
+  "geometry_rmse_camera_px": 0.4779994785785675,
+  "geometry_errors_px": [
+    0.39698898792266846,
+    0.681662380695343,
+    0.49861210584640503,
+    0.39726579189300537,
+    0.5149455070495605,
+    0.7594423890113831,
+    0.16251778602600098,
+    0.32977378368377686,
+    0.22487562894821167
+  ],
+  "spot_peaks_camera_levels": [
+    207.99411010742188,
+    207.92454528808594,
+    202.59947204589844,
+    182.23501586914062,
+    179.46690368652344,
+    154.89837646484375,
+    113.9422836303711,
+    112.70355987548828,
+    112.13648986816406
+  ],
+  "camera_response": [
+    {
+      "screen_level": 0.0,
+      "camera_mean": 87.72193908691406,
+      "clipped_fraction": 0.0
+    },
+    {
+      "screen_level": 0.25,
+      "camera_mean": 144.24339294433594,
+      "clipped_fraction": 0.0
+    },
+    {
+      "screen_level": 0.5,
+      "camera_mean": 172.09515380859375,
+      "clipped_fraction": 0.0
+    },
+    {
+      "screen_level": 0.75,
+      "camera_mean": 180.834228515625,
+      "clipped_fraction": 0.0
+    },
+    {
+      "screen_level": 1.0,
+      "camera_mean": 186.32568359375,
+      "clipped_fraction": 0.0
+    },
+    {
+      "screen_level": 0.5,
+      "camera_mean": 178.17617797851562,
+      "clipped_fraction": 0.0
+    },
+    {
+      "screen_level": 0.25,
+      "camera_mean": 153.84872436523438,
+      "clipped_fraction": 0.0
+    },
+    {
+      "screen_level": 0.75,
+      "camera_mean": 179.34654235839844,
+      "clipped_fraction": 0.0
+    },
+    {
+      "screen_level": 0.0,
+      "camera_mean": 88.43144226074219,
+      "clipped_fraction": 0.0
+    },
+    {
+      "screen_level": 0.5,
+      "camera_mean": 165.3586883544922,
+      "clipped_fraction": 0.0
+    },
+    {
+      "screen_level": 1.0,
+      "camera_mean": 184.636962890625,
+      "clipped_fraction": 0.0
+    },
+    {
+      "screen_level": 0.0,
+      "camera_mean": 89.23967742919922,
+      "clipped_fraction": 0.0
+    }
+  ],
+  "stability": {
+    "dark_level": 88.464,
+    "white_level": 185.481,
+    "camera_response_span": 97.017,
+    "repeat_deviation": {
+      "0.0": 0.0156,
+      "0.25": 0.099,
+      "0.5": 0.1321,
+      "0.75": 0.0153,
+      "1.0": 0.0174
+    },
+    "response_curve": [
+      {
+        "screen_level": 0.0,
+        "camera_mean": 88.431
+      },
+      {
+        "screen_level": 0.25,
+        "camera_mean": 149.046
+      },
+      {
+        "screen_level": 0.5,
+        "camera_mean": 172.095
+      },
+      {
+        "screen_level": 0.75,
+        "camera_mean": 180.09
+      },
+      {
+        "screen_level": 1.0,
+        "camera_mean": 185.481
+      }
+    ],
+    "warnings": [
+      "DRIFT_OR_AUTO_EXPOSURE: repeated 0.25 differs by 9.9% of response span",
+      "DRIFT_OR_AUTO_EXPOSURE: repeated 0.5 differs by 13.2% of response span"
+    ],
+    "stable": false
+  },
+  "notes": [
+    "JPEG pixel values are not calibrated linear radiance.",
+    "A homography maps a SCREEN PLANE, not the depth of a hidden object.",
+    "The camera must be manually locked in the Android camera application; OpenCV cannot reliably do that over IP Webcam.",
+    "Calibration is invalid after moving camera, changing focus, resolution, exposure or screen settings."
+  ]
+}
