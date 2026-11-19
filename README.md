@@ -1,5 +1,7 @@
 # LightScan — monitor + phone camera inverse-imaging laboratory
 
+![pic](pic.png)
+
 **Milestone 1: real hardware calibration, not yet 3D CT.**
 
 This repo is the first physical measurement instrument on the way toward a low-cost optical inverse problem: a PC monitor emits known illumination patterns, a fixed Samsung phone running **IP Webcam** captures their appearance, and LightScan measures geometric mapping and checks photometric repeatability before any attempt to solve for a hidden object.
