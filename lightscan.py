@@ -418,7 +418,7 @@ def scan_region(zone:Zone,H:np.ndarray,shape:tuple[int,...]):
         raise ValueError('Saved calibration projects outside current camera frame; recheck the rig')
     inside=sum(0 <= x < shape[1] and 0 <= y < shape[0] for x,y in corners)
     if inside < 4:
-        raise ValueError('Illumination zone is cropped by the camera: adjust the rig or zone and recalibrate')
+        raise ValueError(f'Illumination zone ({zone.size} screen px) is cropped by the {shape[1]}x{shape[0]} camera frame. Calibration points can still pass because they lie INSIDE the square. Rerun using --zone-px 420, or --zone-px 360 if needed; recalibrate for each zone size.')
     return mask.astype(bool)
 
 
@@ -701,7 +701,7 @@ def parse_args():
     ap=argparse.ArgumentParser(description='LightScan calibration and differential screen probe')
     ap.add_argument('--url',default='',help='Phone IP Webcam base URL on YOUR local network (required without --sim)')
     ap.add_argument('--camera-mode',choices=['shot','video'],default='shot',help='/shot.jpg recommended; /video fallback')
-    ap.add_argument('--zone-px',type=int,default=540,help='Size of central square light field in SCREEN pixels. Measure actual cm separately.')
+    ap.add_argument('--zone-px',type=int,default=420,help='Square light field size in screen pixels (default: 420; reduce if the camera crops its corners).')
     ap.add_argument('--screen-width',type=int)
     ap.add_argument('--screen-height',type=int)
     ap.add_argument('--origin-x',type=int,default=0)
